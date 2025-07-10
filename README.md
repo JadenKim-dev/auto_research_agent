@@ -215,49 +215,6 @@ This enables real-time code editing without rebuilding containers.
 - **Tailwind CSS**: Utility-first styling
 - **TypeScript**: Type-safe development
 
-## Troubleshooting
-
-### Common Issues
-
-1. **Port conflicts**
-   ```bash
-   # Check if ports are in use
-   lsof -i :3000
-   lsof -i :8000
-   ```
-
-2. **Docker build issues**
-   ```bash
-   # Clean Docker cache
-   docker system prune -a
-   ```
-
-3. **Environment variables not loaded**
-   - Ensure `.env` file is in project root
-   - Check variable names match expected format
-   - Restart containers after changing variables
-
-4. **Permission issues on Linux/Mac**
-   ```bash
-   # Fix file permissions
-   sudo chown -R $USER:$USER .
-   ```
-
-### Development Tips
-
-- Use development environment for active coding
-- Production environment for testing deployment
-- Check logs with `docker-compose logs -f [service]`
-- Use `docker-compose exec [service] bash` for container access
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
