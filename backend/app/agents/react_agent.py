@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from enum import Enum
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_openai import ChatOpenAI
@@ -57,6 +57,7 @@ class ResearchReActAgent:
         memory: Optional[ConversationBufferMemory] = None,
         verbose: bool = True,
         max_iterations: int = 10,
+        early_stopping_method: Literal["force", "generate"] = "force",
         **kwargs,
     ):
         """
@@ -67,6 +68,7 @@ class ResearchReActAgent:
             memory: Conversation memory
             verbose: Whether to print reasoning steps
             max_iterations: Maximum number of reasoning steps
+            early_stopping_method: Method to use when stopping early ('force' or 'generate')
         """
         if llm is None:
             api_key = os.getenv("OPENAI_API_KEY")
@@ -107,6 +109,7 @@ class ResearchReActAgent:
             memory=self.memory,
             verbose=verbose,
             max_iterations=max_iterations,
+            early_stopping_method=early_stopping_method,
             handle_parsing_errors=True,
             return_intermediate_steps=True,
         )
@@ -115,6 +118,7 @@ class ResearchReActAgent:
             "prompt_type": prompt_type.value,
             "verbose": verbose,
             "max_iterations": max_iterations,
+            "early_stopping_method": early_stopping_method,
             "model": self.llm.model_name,
         }
 

@@ -23,6 +23,10 @@ class AgentQueryRequest(BaseModel):
     max_iterations: int = Field(
         default=10, description="Maximum number of reasoning steps"
     )
+    early_stopping_method: Literal["force", "generate"] = Field(
+        default="force", 
+        description="Method to use when stopping early: 'force' (stop immediately) or 'generate' (generate final answer)"
+    )
     stream: bool = Field(default=False, description="Whether to stream the response")
 
 
@@ -64,10 +68,13 @@ class StreamingEvent(BaseModel):
 _agent = None
 
 
-def get_agent():
+def get_agent(early_stopping_method: Literal["force", "generate"] = "force"):
     global _agent
     if _agent is None:
-        _agent = create_research_agent(prompt_type=PromptType.STANDARD)
+        _agent = create_research_agent(
+            prompt_type=PromptType.STANDARD,
+            early_stopping_method=early_stopping_method
+        )
     return _agent
 
 
@@ -121,6 +128,7 @@ async def query_agent_stream(request: AgentQueryRequest):
         agent = create_research_agent(
             prompt_type=request.prompt_type,
             max_iterations=request.max_iterations,
+            early_stopping_method=request.early_stopping_method,
             verbose=False,  # Disable verbose to avoid duplicate logs
         )
 
