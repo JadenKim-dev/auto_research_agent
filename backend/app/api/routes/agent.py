@@ -1,11 +1,16 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any, Literal
+from typing import Dict, Any, Literal
 import asyncio
 from sse_starlette.sse import EventSourceResponse
 from langchain.schema import AgentAction, AgentFinish
 
-from ...agents.react_agent import create_research_agent, ReActCallbackHandler, PromptType
+from ...agents.react_agent import (
+    ResearchReActAgent,
+    create_research_agent,
+    ReActCallbackHandler,
+    PromptType,
+)
 
 router = APIRouter(
     prefix="/api/agent",
@@ -24,35 +29,9 @@ class AgentQueryRequest(BaseModel):
         default=10, description="Maximum number of reasoning steps"
     )
     early_stopping_method: Literal["force", "generate"] = Field(
-        default="force", 
-        description="Method to use when stopping early: 'force' (stop immediately) or 'generate' (generate final answer)"
+        default="force", description="Method to use when stopping early"
     )
     stream: bool = Field(default=False, description="Whether to stream the response")
-
-
-class AgentQueryResponse(BaseModel):
-    output: str = Field(..., description="The agent's final answer")
-    intermediate_steps: List[Dict[str, Any]] = Field(
-        default_factory=list, description="The agent's reasoning steps"
-    )
-    trace: Optional[Dict[str, List]] = Field(
-        default=None, description="Detailed trace of thoughts and actions"
-    )
-    config: Dict[str, Any] = Field(
-        default_factory=dict, description="Agent configuration used"
-    )
-    error: bool = Field(default=False, description="Whether an error occurred")
-
-
-class ToolInfo(BaseModel):
-    name: str
-    description: str
-
-
-class AgentInfoResponse(BaseModel):
-    available_tools: List[ToolInfo]
-    prompt_types: List[str]
-    model: str
 
 
 # Streaming Event DTO
@@ -64,18 +43,6 @@ class StreamingEvent(BaseModel):
         return self.model_dump_json()
 
 
-# Global agent instance
-_agent = None
-
-
-def get_agent(early_stopping_method: Literal["force", "generate"] = "force"):
-    global _agent
-    if _agent is None:
-        _agent = create_research_agent(
-            prompt_type=PromptType.STANDARD,
-            early_stopping_method=early_stopping_method
-        )
-    return _agent
 
 
 class StreamingCallbackHandler(ReActCallbackHandler):
@@ -110,11 +77,13 @@ class StreamingCallbackHandler(ReActCallbackHandler):
             data={"output": finish.return_values.get("output", "")},
         )
         asyncio.run_coroutine_threadsafe(self.queue.put(event.to_json()), self.loop)
-        asyncio.run_coroutine_threadsafe(self.queue.put(None), self.loop)  # Signal end of stream
+        asyncio.run_coroutine_threadsafe(
+            self.queue.put(None), self.loop
+        )  # Signal end of stream
 
 
-@router.post("/query/stream")
-async def query_agent_stream(request: AgentQueryRequest):
+@router.post("/query/{session_id}")
+async def query_agent_stream(request: AgentQueryRequest, session_id: str):
     """
     Submit a query to the ReAct agent with streaming response.
 
@@ -129,6 +98,7 @@ async def query_agent_stream(request: AgentQueryRequest):
             prompt_type=request.prompt_type,
             max_iterations=request.max_iterations,
             early_stopping_method=request.early_stopping_method,
+            session_id=session_id,
             verbose=False,  # Disable verbose to avoid duplicate logs
         )
 
@@ -158,34 +128,6 @@ async def query_agent_stream(request: AgentQueryRequest):
         yield f"data: {final_event.to_json()}\n\n"
 
     return EventSourceResponse(event_generator())
-
-
-@router.get("/info", response_model=AgentInfoResponse)
-async def get_agent_info():
-    """
-    Get information about the agent and available tools.
-    """
-    agent = get_agent()
-
-    return AgentInfoResponse(
-        available_tools=[
-            ToolInfo(name=tool.name, description=tool.description)
-            for tool in agent.tools
-        ],
-        prompt_types=[prompt_type.value for prompt_type in PromptType],
-        model=agent.llm.model_name,
-    )
-
-
-@router.post("/clear-memory")
-async def clear_agent_memory():
-    """
-    Clear the agent's conversation memory.
-    """
-    agent = get_agent()
-    agent.clear_memory()
-
-    return {"message": "Agent memory cleared successfully"}
 
 
 __all__ = ["router"]
