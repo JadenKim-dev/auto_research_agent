@@ -9,7 +9,8 @@ import logging
 
 from .prompts import react_prompt, research_react_prompt, simple_react_prompt
 from ..tools.basic_tools import BASIC_TOOLS
-from ..memory.redis_memory import RedisConversationSummaryMemory
+from ..memory.redis_memory import RedisChatMessageHistory
+from ..memory.summary_manager import ConversationSummaryManager
 from ..core.redis_client import RedisClient
 from ..core.llm_client import LLMClient
 
@@ -55,7 +56,7 @@ class ResearchReActAgent:
         tools: Optional[List[BaseTool]] = None,
         llm: Optional[ChatOpenAI] = None,
         prompt_type: PromptType = PromptType.STANDARD,
-        memory: Optional[RedisConversationSummaryMemory] = None,
+        memory: Optional[RedisChatMessageHistory] = None,
         verbose: bool = True,
         max_iterations: int = 10,
         early_stopping_method: Literal["force", "generate"] = "force",
@@ -90,15 +91,13 @@ class ResearchReActAgent:
                 raise ValueError("session_id is required")
 
             redis_client = RedisClient.get_client()
-            self.memory = RedisConversationSummaryMemory(
+            self.summary_manager = ConversationSummaryManager(llm=self.llm)
+            self.memory = RedisChatMessageHistory(
                 session_id=session_id,
-                memory_key="chat_history",
-                return_messages=True,
-                output_key="output",
                 redis_client=redis_client,
-                llm=self.llm,
+                summary_manager=self.summary_manager,
             )
-            logger.info(f"Using Redis-backed summary memory for session: {session_id}")
+            logger.info(f"Using Redis-backed chat history for session: {session_id}")
 
         self.agent = create_react_agent(
             llm=self.llm, tools=self.tools, prompt=self.prompt
@@ -107,7 +106,6 @@ class ResearchReActAgent:
         self.executor = AgentExecutor(
             agent=self.agent,
             tools=self.tools,
-            memory=self.memory,
             verbose=verbose,
             max_iterations=max_iterations,
             early_stopping_method=early_stopping_method,
