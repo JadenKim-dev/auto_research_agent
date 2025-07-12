@@ -92,7 +92,9 @@ class ResearchReActAgent:
         self.prompt = prompt_map.get(prompt_type, react_prompt)
 
         self.memory = memory or ConversationBufferMemory(
-            memory_key="chat_history", return_messages=True
+            memory_key="chat_history", 
+            return_messages=True,
+            output_key="output"
         )
 
         self.agent = create_react_agent(

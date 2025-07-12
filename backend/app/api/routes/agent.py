@@ -72,9 +72,10 @@ def get_agent():
 
 
 class StreamingCallbackHandler(ReActCallbackHandler):
-    def __init__(self, queue: asyncio.Queue):
+    def __init__(self, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         super().__init__()
         self.queue = queue
+        self.loop = loop
 
     def on_agent_action(self, action: AgentAction, **kwargs) -> None:
         super().on_agent_action(action, **kwargs)
@@ -86,14 +87,14 @@ class StreamingCallbackHandler(ReActCallbackHandler):
                 "thought": action.log,
             },
         )
-        asyncio.create_task(self.queue.put(event.to_json()))
+        asyncio.run_coroutine_threadsafe(self.queue.put(event.to_json()), self.loop)
 
     def on_tool_end(self, output: str, **kwargs) -> None:
         event = StreamingEvent(
             type="observation",
             data={"output": output},
         )
-        asyncio.create_task(self.queue.put(event.to_json()))
+        asyncio.run_coroutine_threadsafe(self.queue.put(event.to_json()), self.loop)
 
     def on_agent_finish(self, finish: AgentFinish, **kwargs) -> None:
         super().on_agent_finish(finish, **kwargs)
@@ -101,8 +102,8 @@ class StreamingCallbackHandler(ReActCallbackHandler):
             type="final_answer",
             data={"output": finish.return_values.get("output", "")},
         )
-        asyncio.create_task(self.queue.put(event.to_json()))
-        asyncio.create_task(self.queue.put(None))  # Signal end of stream
+        asyncio.run_coroutine_threadsafe(self.queue.put(event.to_json()), self.loop)
+        asyncio.run_coroutine_threadsafe(self.queue.put(None), self.loop)  # Signal end of stream
 
 
 @router.post("/query/stream")
@@ -115,6 +116,7 @@ async def query_agent_stream(request: AgentQueryRequest):
 
     async def event_generator():
         queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
 
         agent = create_research_agent(
             prompt_type=request.prompt_type,
@@ -122,7 +124,7 @@ async def query_agent_stream(request: AgentQueryRequest):
             verbose=False,  # Disable verbose to avoid duplicate logs
         )
 
-        callback = StreamingCallbackHandler(queue)
+        callback = StreamingCallbackHandler(queue, loop)
 
         task = asyncio.create_task(agent.run(request.query, callbacks=[callback]))
         while True:
