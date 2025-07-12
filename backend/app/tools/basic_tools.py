@@ -25,6 +25,13 @@ class WordCountInput(BaseModel):
     )
 
 
+class SearchInput(BaseModel):
+    query: str = Field(description="Search query to find information about")
+    num_results: int = Field(
+        default=5, description="Number of search results to return (1-10)"
+    )
+
+
 @tool("calculator", args_schema=CalculatorInput)
 def calculator(expression: str) -> str:
     """
@@ -115,7 +122,47 @@ def count_words(text: str, count_type: str = "words") -> str:
         )
 
 
-BASIC_TOOLS = [calculator, get_current_time, reverse_string, count_words]
+@tool("web_search", args_schema=SearchInput)
+def web_search(query: str, num_results: int = 5) -> str:
+    """
+    Search the web for information using DuckDuckGo.
+
+    Args:
+        query: The search query
+        num_results: Number of results to return (1-10)
+
+    Returns:
+        Formatted search results as a string
+    """
+    try:
+        from duckduckgo_search import DDGS
+        
+        num_results = max(1, min(num_results, 10))
+        
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=num_results))
+        
+        if not results:
+            return f"No search results found for '{query}'"
+        
+        result_text = f"Search results for '{query}' (showing {len(results)} results):\n\n"
+        
+        for i, result in enumerate(results, 1):
+            title = result.get("title", "No title")
+            url = result.get("href", "No URL")
+            snippet = result.get("body", "No description available")
+            
+            result_text += f"{i}. **{title}**\n"
+            result_text += f"   URL: {url}\n"
+            result_text += f"   {snippet}\n\n"
+        
+        return result_text
+        
+    except Exception as e:
+        return f"Error performing web search: {str(e)}"
+
+
+BASIC_TOOLS = [calculator, get_current_time, reverse_string, count_words, web_search]
 
 __all__ = [
     "BASIC_TOOLS",
@@ -123,4 +170,5 @@ __all__ = [
     "get_current_time",
     "reverse_string",
     "count_words",
+    "web_search",
 ]
