@@ -4,6 +4,7 @@ from typing import Dict, Any, Literal
 import asyncio
 from sse_starlette.sse import EventSourceResponse
 from langchain.schema import AgentAction, AgentFinish
+import uuid
 
 from ...agents.react_agent import (
     ResearchReActAgent,
@@ -21,12 +22,13 @@ router = APIRouter(
 
 class AgentQueryRequest(BaseModel):
     query: str = Field(..., description="The question or task for the agent")
+    session_id: str = Field(default="", description="Session ID for conversation continuity")
     prompt_type: PromptType = Field(
         default=PromptType.STANDARD,
         description=f"Type of prompt to use: {', '.join(PromptType)}",
     )
     max_iterations: int = Field(
-        default=10, description="Maximum number of reasoning steps"
+        default=10, gt=0, description="Maximum number of reasoning steps"
     )
     early_stopping_method: Literal["force", "generate"] = Field(
         default="force", description="Method to use when stopping early"
@@ -36,13 +38,11 @@ class AgentQueryRequest(BaseModel):
 
 # Streaming Event DTO
 class StreamingEvent(BaseModel):
-    type: Literal["action", "observation", "final_answer", "error", "complete"]
+    type: Literal["session", "action", "observation", "final_answer", "error", "complete"]
     data: Dict[str, Any] = Field(..., description="Event data")
 
     def to_json(self) -> str:
         return self.model_dump_json()
-
-
 
 
 class StreamingCallbackHandler(ReActCallbackHandler):
@@ -82,17 +82,24 @@ class StreamingCallbackHandler(ReActCallbackHandler):
         )  # Signal end of stream
 
 
-@router.post("/query/{session_id}")
-async def query_agent_stream(request: AgentQueryRequest, session_id: str):
+@router.post("/query")
+async def query_agent_stream(request: AgentQueryRequest):
     """
     Submit a query to the ReAct agent with streaming response.
 
     Returns a stream of Server-Sent Events with the agent's reasoning process.
     """
+    session_id = request.session_id or str(uuid.uuid4())
 
     async def event_generator():
         queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
+
+        session_event = StreamingEvent(
+            type="session",
+            data={"session_id": session_id}
+        )
+        yield f"data: {session_event.to_json()}\n\n"
 
         agent = create_research_agent(
             prompt_type=request.prompt_type,
