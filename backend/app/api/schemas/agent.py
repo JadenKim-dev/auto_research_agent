@@ -5,7 +5,7 @@ from ...agents.react_agent import PromptType
 
 
 class AgentQueryRequest(BaseModel):
-    query: str = Field(..., description="The question or task for the agent")
+    query: str = Field(..., min_length=1, description="The question or task for the agent")
     session_id: str = Field(
         default="", description="Session ID for conversation continuity"
     )
