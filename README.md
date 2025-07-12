@@ -127,14 +127,6 @@ Create a `.env` file in the project root with the following variables:
 ```env
 # OpenAI API Configuration
 OPENAI_API_KEY=your_openai_api_key_here
-
-# Pinecone Configuration (if using vector database)
-PINECONE_API_KEY=your_pinecone_api_key_here
-PINECONE_ENVIRONMENT=your_pinecone_environment_here
-
-# Other API keys as needed
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-PERPLEXITY_API_KEY=your_perplexity_api_key_here
 ```
 
 ## Docker Commands
