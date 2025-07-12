@@ -75,7 +75,7 @@ class ResearchReActAgent:
 
             self.llm = ChatOpenAI(
                 temperature=0,
-                model="gpt-4-turbo-preview",
+                model="gpt-4.1-nano-2025-04-14",
                 api_key=SecretStr(api_key),
                 **kwargs,
             )
