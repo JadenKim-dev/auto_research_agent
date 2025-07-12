@@ -1,15 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import os
 
-# Load environment variables
 load_dotenv()
+
+from .api.routes import agent
 
 app = FastAPI(
     title="Research Assistant API",
     description="AI-powered research assistant backend",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -20,9 +20,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(agent.router)
+
+
 @app.get("/")
 def read_root():
     return {"message": "Research Assistant API is running"}
+
 
 @app.get("/health")
 def health_check():
