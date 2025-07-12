@@ -33,13 +33,20 @@ class ReActCallbackHandler(BaseCallbackHandler):
         self.observations: List[str] = []
 
     def on_agent_action(self, action: AgentAction, **kwargs) -> None:
+        self.thoughts.append(action.log)
         self.actions.append(
             {"tool": action.tool, "input": action.tool_input, "log": action.log}
         )
         logger.info(f"Agent Action: {action.tool} with input: {action.tool_input}")
 
     def on_agent_finish(self, finish: AgentFinish, **kwargs) -> None:
+        self.thoughts.append(finish.log)
         logger.info(f"Agent Finish: {finish.return_values}")
+
+    def on_tool_end(self, output: str, **kwargs) -> None:
+        """Called when a tool finishes running."""
+        self.observations.append(output)
+        logger.info(f"Tool Output: {output}")
 
     def get_trace(self) -> Dict[str, List]:
         return {
