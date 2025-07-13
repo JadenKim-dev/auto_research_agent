@@ -1,10 +1,8 @@
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Dict, Any, Optional
 from enum import Enum
 from langchain.agents import AgentExecutor, create_react_agent
-from langchain_openai import ChatOpenAI
-from langchain.tools import BaseTool
 from langchain.callbacks.base import BaseCallbackHandler
-from langchain.schema import AgentAction, AgentFinish
+from pydantic import BaseModel, Field, field_validator
 import logging
 
 from .prompts import react_prompt, research_react_prompt, simple_react_prompt
@@ -13,6 +11,7 @@ from ..memory.redis_memory import RedisChatMessageHistory
 from ..memory.summary_manager import ConversationSummaryManager
 from ..core.redis_client import RedisClient
 from ..core.llm_client import LLMClient
+from ..logging.tao_logger import TAOLogger
 
 logger = logging.getLogger(__name__)
 
@@ -25,86 +24,64 @@ class PromptType(str, Enum):
     SIMPLE = "simple"
 
 
-class ReActCallbackHandler(BaseCallbackHandler):
+# Prompt mapping - defined at module level for efficiency
+PROMPT_MAP = {
+    PromptType.STANDARD: react_prompt,
+    PromptType.RESEARCH: research_react_prompt,
+    PromptType.SIMPLE: simple_react_prompt,
+}
 
-    def __init__(self):
-        self.thoughts: List[str] = []
-        self.actions: List[Dict[str, Any]] = []
-        self.observations: List[str] = []
 
-    def on_agent_action(self, action: AgentAction, **kwargs) -> None:
-        self.thoughts.append(action.log)
-        self.actions.append(
-            {"tool": action.tool, "input": action.tool_input, "log": action.log}
-        )
-        logger.info(f"Agent Action: {action.tool} with input: {action.tool_input}")
+class AgentConfig(BaseModel):    
+    session_id: str = Field(..., description="Session ID for Redis memory")
+    prompt_type: PromptType = Field(
+        default=PromptType.STANDARD,
+        description="Type of prompt to use"
+    )
 
-    def on_agent_finish(self, finish: AgentFinish, **kwargs) -> None:
-        self.thoughts.append(finish.log)
-        logger.info(f"Agent Finish: {finish.return_values}")
+    @field_validator('session_id')
+    @classmethod
+    def validate_session_id(cls, v):
+        if not v or not v.strip():
+            raise ValueError("session_id is required and cannot be empty")
+        return v.strip()
 
-    def on_tool_end(self, output: str, **kwargs) -> None:
-        """Called when a tool finishes running."""
-        self.observations.append(output)
-        logger.info(f"Tool Output: {output}")
-
-    def get_trace(self) -> Dict[str, List]:
-        return {
-            "thoughts": self.thoughts,
-            "actions": self.actions,
-            "observations": self.observations,
-        }
+    @field_validator('prompt_type')
+    @classmethod
+    def validate_prompt_type(cls, v):
+        if not isinstance(v, PromptType):
+            raise TypeError(f"prompt_type must be a PromptType enum, got {type(v)}")
+        return v
 
 
 class ResearchReActAgent:
     def __init__(
         self,
         session_id: str,
-        tools: Optional[List[BaseTool]] = None,
-        llm: Optional[ChatOpenAI] = None,
         prompt_type: PromptType = PromptType.STANDARD,
-        memory: Optional[RedisChatMessageHistory] = None,
-        verbose: bool = True,
-        max_iterations: int = 10,
-        early_stopping_method: Literal["force", "generate"] = "force",
-        **kwargs,
     ):
         """
         Args:
-            tools: List of tools available to the agent
-            llm: Language model to use (defaults to OpenAI)
-            prompt_type: Type of prompt to use (PromptType enum)
-            memory: Redis conversation memory (will be created if not provided)
             session_id: Session ID for Redis memory (required)
-            verbose: Whether to print reasoning steps
-            max_iterations: Maximum number of reasoning steps
-            early_stopping_method: Method to use when stopping early ('force' or 'generate')
+            prompt_type: Type of prompt to use (PromptType enum)
         """
-        self.llm = llm or LLMClient.get_client()
+        config = AgentConfig(session_id=session_id, prompt_type=prompt_type)
+        
+        self.session_id = config.session_id
+        self.prompt_type = config.prompt_type
+        self.llm = LLMClient.get_client()
+        self.tools = BASIC_TOOLS
 
-        self.tools = tools or BASIC_TOOLS
+        self.prompt = PROMPT_MAP.get(config.prompt_type, react_prompt)
 
-        prompt_map = {
-            PromptType.STANDARD: react_prompt,
-            PromptType.RESEARCH: research_react_prompt,
-            PromptType.SIMPLE: simple_react_prompt,
-        }
-        self.prompt = prompt_map.get(prompt_type, react_prompt)
-
-        if memory:
-            self.memory = memory
-        else:
-            if not session_id:
-                raise ValueError("session_id is required")
-
-            redis_client = RedisClient.get_client()
-            self.summary_manager = ConversationSummaryManager(llm=self.llm)
-            self.memory = RedisChatMessageHistory(
-                session_id=session_id,
-                redis_client=redis_client,
-                summary_manager=self.summary_manager,
-            )
-            logger.info(f"Using Redis-backed chat history for session: {session_id}")
+        redis_client = RedisClient.get_client()
+        self.summary_manager = ConversationSummaryManager(llm=self.llm)
+        self.memory = RedisChatMessageHistory(
+            session_id=self.session_id,
+            redis_client=redis_client,
+            summary_manager=self.summary_manager,
+        )
+        logger.info(f"Using Redis-backed chat history for session: {self.session_id}")
 
         self.agent = create_react_agent(
             llm=self.llm, tools=self.tools, prompt=self.prompt
@@ -113,23 +90,25 @@ class ResearchReActAgent:
         self.executor = AgentExecutor(
             agent=self.agent,
             tools=self.tools,
-            verbose=verbose,
-            max_iterations=max_iterations,
-            early_stopping_method=early_stopping_method,
+            verbose=True,
+            max_iterations=10,
+            early_stopping_method="force",
             handle_parsing_errors=True,
             return_intermediate_steps=True,
         )
 
         self.config = {
-            "prompt_type": prompt_type.value,
-            "verbose": verbose,
-            "max_iterations": max_iterations,
-            "early_stopping_method": early_stopping_method,
+            "prompt_type": config.prompt_type.value,
+            "verbose": True,
+            "max_iterations": 10,
+            "early_stopping_method": "force",
             "model": self.llm.model_name,
         }
 
     async def run(
-        self, query: str, callbacks: Optional[List[BaseCallbackHandler]] = None
+        self,
+        query: str,
+        callbacks: List[BaseCallbackHandler] = [],
     ) -> Dict[str, Any]:
         """
         Run the agent with a query.
@@ -141,8 +120,11 @@ class ResearchReActAgent:
         Returns:
             Dictionary containing the result and metadata
         """
-        if callbacks is None:
-            callbacks = [ReActCallbackHandler()]
+        tao_logger = TAOLogger(
+            session_id=getattr(self.memory, "session_id", "default")
+        )
+        callbacks.append(tao_logger)
+
         try:
             result = await self.executor.ainvoke(
                 {"input": query}, config={"callbacks": callbacks}
@@ -158,48 +140,22 @@ class ResearchReActAgent:
             }
 
         trace = None
+        tao_logs = None
         for callback in callbacks:
-            if isinstance(callback, ReActCallbackHandler):
+            if isinstance(callback, TAOLogger):
                 trace = callback.get_trace()
-                break
+                tao_logs = callback.get_logs()
 
         return {
             "output": result.get("output", ""),
             "intermediate_steps": result.get("intermediate_steps", []),
             "trace": trace,
+            "tao_logs": tao_logs,
             "config": self.config,
         }
 
 
-def create_research_agent(
-    session_id: str,
-    prompt_type: PromptType = PromptType.RESEARCH,
-    tools: Optional[List[BaseTool]] = None,
-    **kwargs,
-) -> ResearchReActAgent:
-    """
-    Factory function to create a research agent.
-
-    Args:
-        prompt_type: Type of prompt to use (PromptType enum)
-        tools: Optional list of tools
-        session_id: Session ID for Redis memory (required)
-        **kwargs: Additional arguments for the agent
-
-    Returns:
-        Configured ResearchReActAgent instance
-    """
-    return ResearchReActAgent(
-        tools=tools,
-        prompt_type=prompt_type,
-        session_id=session_id,
-        **kwargs,
-    )
-
-
 __all__ = [
     "ResearchReActAgent",
-    "create_research_agent",
-    "ReActCallbackHandler",
     "PromptType",
 ]

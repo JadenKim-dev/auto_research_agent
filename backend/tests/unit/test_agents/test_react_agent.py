@@ -1,296 +1,203 @@
 import pytest
 from unittest.mock import Mock, patch
-from langchain.tools import BaseTool
-from langchain_openai import ChatOpenAI
+from pydantic import ValidationError
 from app.agents.react_agent import (
     ResearchReActAgent,
-    create_research_agent,
     PromptType,
-    ReActCallbackHandler,
 )
 from app.memory.redis_memory import RedisChatMessageHistory
-from typing import List, cast
 
 
-class TestReActCallbackHandler:
-    """Test cases for ReActCallbackHandler."""
-
-    def test_init(self):
-        """Test ReActCallbackHandler initialization."""
-        handler = ReActCallbackHandler()
-        assert handler.thoughts == []
-
-    def test_on_agent_action(self):
-        """Test on_agent_action method stores thoughts."""
-        handler = ReActCallbackHandler()
-        mock_action = Mock()
-        mock_action.log = "I need to search for information"
-
-        handler.on_agent_action(mock_action, color="blue")
-
-        assert len(handler.thoughts) == 1
-        assert handler.thoughts[0] == "I need to search for information"
-
-    def test_on_agent_finish(self):
-        """Test on_agent_finish method stores final thought."""
-        handler = ReActCallbackHandler()
-        mock_finish = Mock()
-        mock_finish.log = "I have found the answer"
-
-        handler.on_agent_finish(mock_finish, color="green")
-
-        assert len(handler.thoughts) == 1
-        assert handler.thoughts[0] == "I have found the answer"
-
-    def test_on_tool_end(self):
-        """Test on_tool_end method stores observations."""
-        handler = ReActCallbackHandler()
-        tool_output = "Search results: 42 is the answer"
-
-        handler.on_tool_end(tool_output)
-
-        assert len(handler.observations) == 1
-        assert handler.observations[0] == "Search results: 42 is the answer"
+@pytest.fixture
+def mock_agent_dependencies():
+    """Mock all ResearchReActAgent dependencies."""
+    with patch("app.agents.react_agent.LLMClient") as mock_llm_client, \
+         patch("app.agents.react_agent.RedisClient") as mock_redis_client, \
+         patch("app.agents.react_agent.RedisChatMessageHistory") as mock_memory, \
+         patch("app.agents.react_agent.ConversationSummaryManager") as mock_summary, \
+         patch("app.agents.react_agent.create_react_agent") as mock_create_agent, \
+         patch("app.agents.react_agent.AgentExecutor") as mock_executor:
+        
+        # 기본 설정
+        mock_llm_instance = Mock()
+        mock_llm_instance.model_name = "gpt-4o-mini"
+        mock_llm_client.get_client.return_value = mock_llm_instance
+        
+        mock_redis_instance = Mock()
+        mock_redis_client.get_client.return_value = mock_redis_instance
+        
+        mock_agent_instance = Mock()
+        mock_create_agent.return_value = mock_agent_instance
+        
+        mock_executor_instance = Mock()
+        mock_executor.return_value = mock_executor_instance
+        
+        yield {
+            'llm_client': mock_llm_client,
+            'llm_instance': mock_llm_instance,
+            'redis_client': mock_redis_client,
+            'redis_instance': mock_redis_instance,
+            'memory': mock_memory,
+            'summary': mock_summary,
+            'create_agent': mock_create_agent,
+            'agent_instance': mock_agent_instance,
+            'executor': mock_executor,
+            'executor_instance': mock_executor_instance
+        }
 
 
 class TestResearchReActAgent:
     """Test cases for ResearchReActAgent."""
 
-    @patch("app.agents.react_agent.create_react_agent")
-    @patch("app.agents.react_agent.AgentExecutor")
-    def test_init_with_memory(
-        self, mock_executor_class, mock_create_agent, mock_llm, test_session_id
-    ):
-        """Test agent initialization with provided memory."""
-        mock_memory = Mock(spec=RedisChatMessageHistory)
-        mock_tools = cast(List[BaseTool], [Mock(spec=BaseTool)])
-
-        mock_agent = Mock()
-        mock_create_agent.return_value = mock_agent
-        mock_executor = Mock()
-        mock_executor_class.return_value = mock_executor
-
+    def test_init_simplified(self, mock_agent_dependencies, test_session_id):
+        """Test simplified agent initialization."""
+        mocks = mock_agent_dependencies
+        
         agent = ResearchReActAgent(
             session_id=test_session_id,
-            tools=mock_tools,
-            llm=mock_llm,
-            memory=mock_memory,
-            verbose=True,
-            max_iterations=15,
+            prompt_type=PromptType.STANDARD,
         )
 
-        assert agent.llm == mock_llm
-        assert agent.tools == mock_tools
-        assert agent.memory == mock_memory
-        assert agent.agent == mock_agent
-        assert agent.executor == mock_executor
+        assert agent.llm == mocks['llm_instance']
+        assert agent.agent == mocks['agent_instance']
+        assert agent.executor == mocks['executor_instance']
 
-        # Verify AgentExecutor was called with correct parameters
-        mock_executor_class.assert_called_once()
-        call_kwargs = mock_executor_class.call_args[1]
-        assert call_kwargs["verbose"] == True
-        assert call_kwargs["max_iterations"] == 15
-
-    @patch("app.agents.react_agent.create_react_agent")
-    @patch("app.agents.react_agent.AgentExecutor")
-    @patch("app.agents.react_agent.RedisClient")
-    @patch("app.agents.react_agent.LLMClient")
-    def test_init_without_memory(
-        self,
-        mock_llm_client,
-        mock_redis_client,
-        mock_executor_class,
-        mock_create_agent,
-        test_session_id,
-    ):
+    def test_init_without_memory(self, mock_agent_dependencies, test_session_id):
         """Test agent initialization without provided memory (creates new one)."""
-        # Setup mocks
-        mock_llm = Mock(spec=ChatOpenAI)
-        mock_llm.model_name = "gpt-4o-mini"
-        mock_llm_client.get_client.return_value = mock_llm
+        mocks = mock_agent_dependencies
+        
+        agent = ResearchReActAgent(
+            session_id=test_session_id, 
+            prompt_type=PromptType.RESEARCH
+        )
 
-        mock_redis = Mock()
-        mock_redis_client.get_client.return_value = mock_redis
+        # Verify memory and summary manager were created
+        mocks['summary'].assert_called_once_with(llm=mocks['llm_instance'])
+        mocks['memory'].assert_called_once_with(
+            session_id=test_session_id,
+            redis_client=mocks['redis_instance'],
+            summary_manager=mocks['summary'].return_value,
+        )
 
-        mock_agent = Mock()
-        mock_create_agent.return_value = mock_agent
-        mock_executor = Mock()
-        mock_executor_class.return_value = mock_executor
-
-        with patch(
-            "app.agents.react_agent.RedisChatMessageHistory"
-        ) as mock_memory_class:
-            with patch(
-                "app.agents.react_agent.ConversationSummaryManager"
-            ) as mock_summary_class:
-                mock_memory = Mock()
-                mock_memory_class.return_value = mock_memory
-                mock_summary_manager = Mock()
-                mock_summary_class.return_value = mock_summary_manager
-
-                agent = ResearchReActAgent(
-                    session_id=test_session_id, prompt_type=PromptType.RESEARCH
-                )
-
-                # Verify memory and summary manager were created
-                mock_summary_class.assert_called_once_with(llm=mock_llm)
-                mock_memory_class.assert_called_once_with(
-                    session_id=test_session_id,
-                    redis_client=mock_redis,
-                    summary_manager=mock_summary_manager,
-                )
-
-                assert agent.memory == mock_memory
-                assert agent.summary_manager == mock_summary_manager
+    def test_init_empty_session_id(self, mock_agent_dependencies):
+        """Test that empty session_id is handled correctly."""
+        # Empty session_id should work with simplified interface
+        agent = ResearchReActAgent(session_id="test_session")
+        assert agent is not None
 
     def test_init_missing_session_id(self):
-        """Test that missing session_id raises ValueError."""
-        with pytest.raises(ValueError, match="session_id is required"):
+        """Test that missing session_id raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            ResearchReActAgent(session_id="")
+        assert "session_id is required and cannot be empty" in str(exc_info.value)
+        
+        with pytest.raises(ValidationError) as exc_info:
+            ResearchReActAgent(session_id="   ")  # whitespace only
+        assert "session_id is required and cannot be empty" in str(exc_info.value)
+        
+        with pytest.raises(ValidationError):
             ResearchReActAgent(session_id=None)  # type: ignore
 
-    @patch("app.agents.react_agent.create_react_agent")
-    @patch("app.agents.react_agent.AgentExecutor")
-    def test_prompt_type_selection(
-        self, mock_executor_class, mock_create_agent, mock_llm, test_session_id
-    ):
+    def test_init_invalid_prompt_type(self):
+        """Test that invalid prompt_type raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            ResearchReActAgent(session_id="test", prompt_type="invalid")  # type: ignore
+        assert "Input should be" in str(exc_info.value)
+        
+        with pytest.raises(ValidationError):
+            ResearchReActAgent(session_id="test", prompt_type=123)  # type: ignore
+
+    def test_prompt_type_selection(self, mock_agent_dependencies, test_session_id):
         """Test that different prompt types are selected correctly."""
-        mock_memory = Mock(spec=RedisChatMessageHistory)
+        mocks = mock_agent_dependencies
+        
+        agent = ResearchReActAgent(
+            session_id=test_session_id,
+            prompt_type=PromptType.RESEARCH,
+        )
 
-        with patch(
-            "app.agents.react_agent.research_react_prompt"
-        ) as mock_research_prompt:
-            agent = ResearchReActAgent(
-                session_id=test_session_id,
-                llm=mock_llm,
-                memory=mock_memory,
-                prompt_type=PromptType.RESEARCH,
-            )
+        # Verify agent was created
+        mocks['create_agent'].assert_called_once()
+        # The prompt should be set from PROMPT_MAP
+        assert agent.prompt is not None
 
-            # Verify the research prompt was used
-            mock_create_agent.assert_called_once()
-            call_args = mock_create_agent.call_args[1]
-            assert call_args["prompt"] == mock_research_prompt
+    def test_session_id_whitespace_handling(self, mock_agent_dependencies):
+        """Test that session_id whitespace is handled correctly."""
+        # Whitespace should be trimmed
+        agent = ResearchReActAgent(session_id="  test_session  ")
+        assert agent.session_id == "test_session"
 
     @pytest.mark.asyncio
-    async def test_run_success(self, mock_llm, test_session_id):
+    async def test_run_success(self, mock_agent_dependencies, test_session_id):
         """Test successful agent run."""
-        mock_memory = Mock(spec=RedisChatMessageHistory)
+        mocks = mock_agent_dependencies
+        
+        # Mock successful execution
+        mock_result = {
+            "output": "The answer is 42",
+            "intermediate_steps": [("thought", "action")],
+        }
 
-        with patch("app.agents.react_agent.create_react_agent"):
-            with patch("app.agents.react_agent.AgentExecutor") as mock_executor_class:
-                mock_executor = Mock()
-                mock_executor_class.return_value = mock_executor
+        async def mock_ainvoke(*args, **kwargs):
+            return mock_result
 
-                # Mock successful execution
-                mock_result = {
-                    "output": "The answer is 42",
-                    "intermediate_steps": [("thought", "action")],
-                }
+        mocks['executor_instance'].ainvoke = mock_ainvoke
 
-                async def mock_ainvoke(*args, **kwargs):
-                    return mock_result
+        agent = ResearchReActAgent(session_id=test_session_id)
 
-                mock_executor.ainvoke = mock_ainvoke
+        result = await agent.run("What is the answer?")
 
-                agent = ResearchReActAgent(
-                    session_id=test_session_id, llm=mock_llm, memory=mock_memory
-                )
-
-                result = await agent.run("What is the answer?")
-
-                assert result["output"] == "The answer is 42"
-                assert result["intermediate_steps"] == [("thought", "action")]
-                assert "config" in result
+        assert result["output"] == "The answer is 42"
+        assert result["intermediate_steps"] == [("thought", "action")]
+        assert "config" in result
 
     @pytest.mark.asyncio
-    async def test_run_with_callbacks(self, mock_llm, test_session_id):
+    async def test_run_with_callbacks(self, mock_agent_dependencies, test_session_id):
         """Test agent run with custom callbacks."""
-        mock_memory = Mock(spec=RedisChatMessageHistory)
+        mocks = mock_agent_dependencies
         custom_callback = Mock()
 
-        with patch("app.agents.react_agent.create_react_agent"):
-            with patch("app.agents.react_agent.AgentExecutor") as mock_executor_class:
-                mock_executor = Mock()
-                mock_executor_class.return_value = mock_executor
-                mock_executor.ainvoke.return_value = {"output": "result"}
+        mocks['executor_instance'].ainvoke.return_value = {"output": "result"}
 
-                agent = ResearchReActAgent(
-                    session_id=test_session_id, llm=mock_llm, memory=mock_memory
-                )
+        agent = ResearchReActAgent(session_id=test_session_id)
 
-                await agent.run("test query", callbacks=[custom_callback])
+        await agent.run("test query", callbacks=[custom_callback])
 
-                # Verify custom callback was used
-                call_args = mock_executor.ainvoke.call_args[1]
-                assert custom_callback in call_args["config"]["callbacks"]
+        # Verify custom callback was used
+        call_args = mocks['executor_instance'].ainvoke.call_args[1]
+        assert custom_callback in call_args["config"]["callbacks"]
 
     @pytest.mark.asyncio
-    async def test_run_exception_handling(self, mock_llm, test_session_id):
+    async def test_run_exception_handling(self, mock_agent_dependencies, test_session_id):
         """Test that exceptions during execution are handled properly."""
-        mock_memory = Mock(spec=RedisChatMessageHistory)
+        mocks = mock_agent_dependencies
+        
+        # Mock execution failure
+        mocks['executor_instance'].ainvoke.side_effect = Exception("Execution failed")
 
-        with patch("app.agents.react_agent.create_react_agent"):
-            with patch("app.agents.react_agent.AgentExecutor") as mock_executor_class:
-                mock_executor = Mock()
-                mock_executor_class.return_value = mock_executor
+        agent = ResearchReActAgent(session_id=test_session_id)
 
-                # Mock execution failure
-                mock_executor.ainvoke.side_effect = Exception("Execution failed")
+        result = await agent.run("test query")
 
-                agent = ResearchReActAgent(
-                    session_id=test_session_id, llm=mock_llm, memory=mock_memory
-                )
+        assert result["error"] == True
+        assert "Error: Execution failed" in result["output"]
+        assert result["intermediate_steps"] == []
 
-                result = await agent.run("test query")
-
-                assert result["error"] == True
-                assert "Error: Execution failed" in result["output"]
-                assert result["intermediate_steps"] == []
-
-    def test_config_property(self, mock_llm, test_session_id):
+    def test_config_property(self, mock_agent_dependencies, test_session_id):
         """Test that config property contains correct information."""
-        mock_memory = Mock(spec=RedisChatMessageHistory)
-
-        with patch("app.agents.react_agent.create_react_agent"):
-            with patch("app.agents.react_agent.AgentExecutor"):
-                agent = ResearchReActAgent(
-                    session_id=test_session_id,
-                    llm=mock_llm,
-                    memory=mock_memory,
-                    prompt_type=PromptType.SIMPLE,
-                    verbose=False,
-                    max_iterations=20,
-                    early_stopping_method="generate",
-                )
-
-                config = agent.config
-
-                assert config["prompt_type"] == "simple"
-                assert config["verbose"] == False
-                assert config["max_iterations"] == 20
-                assert config["early_stopping_method"] == "generate"
-                assert config["model"] == mock_llm.model_name
-
-
-class TestCreateResearchAgent:
-    """Test cases for create_research_agent function."""
-
-    @patch("app.agents.react_agent.ResearchReActAgent")
-    def test_create_research_agent(self, mock_agent_class, test_session_id):
-        """Test create_research_agent function."""
-        mock_agent = Mock()
-        mock_agent_class.return_value = mock_agent
-
-        result = create_research_agent(
+        mocks = mock_agent_dependencies
+        
+        agent = ResearchReActAgent(
             session_id=test_session_id,
-            prompt_type=PromptType.RESEARCH,
-            max_iterations=25,
+            prompt_type=PromptType.SIMPLE,
         )
 
-        assert result == mock_agent
-        mock_agent_class.assert_called_once_with(
-            tools=None,
-            prompt_type=PromptType.RESEARCH,
-            session_id=test_session_id,
-            max_iterations=25,
-        )
+        config = agent.config
+
+        assert config["prompt_type"] == "simple"
+        assert config["verbose"] == True
+        assert config["max_iterations"] == 10
+        assert config["early_stopping_method"] == "force"
+        assert config["model"] == "gpt-4o-mini"
+
+

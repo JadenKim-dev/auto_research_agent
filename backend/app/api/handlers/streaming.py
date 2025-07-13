@@ -1,17 +1,16 @@
 import asyncio
 from langchain.schema import AgentAction, AgentFinish
-from ...agents.react_agent import ReActCallbackHandler
+from langchain.callbacks.base import BaseCallbackHandler
 from ..schemas.agent import StreamingEvent
 
 
-class StreamingCallbackHandler(ReActCallbackHandler):
+class StreamingCallbackHandler(BaseCallbackHandler):
     def __init__(self, queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):
         super().__init__()
         self.queue = queue
         self.loop = loop
 
     def on_agent_action(self, action: AgentAction, **kwargs) -> None:
-        super().on_agent_action(action, **kwargs)
         event = StreamingEvent(
             type="action",
             data={
@@ -30,7 +29,6 @@ class StreamingCallbackHandler(ReActCallbackHandler):
         asyncio.run_coroutine_threadsafe(self.queue.put(event.to_json()), self.loop)
 
     def on_agent_finish(self, finish: AgentFinish, **kwargs) -> None:
-        super().on_agent_finish(finish, **kwargs)
         event = StreamingEvent(
             type="final_answer",
             data={"output": finish.return_values.get("output", "")},
