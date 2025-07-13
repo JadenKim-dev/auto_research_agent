@@ -3,7 +3,7 @@ import asyncio
 from sse_starlette.sse import EventSourceResponse
 import uuid
 
-from ...agents.react_agent import create_research_agent
+from ...agents.react_agent import ResearchReActAgent
 from ..schemas.agent import AgentQueryRequest, StreamingEvent
 from ..handlers.streaming import StreamingCallbackHandler
 
@@ -30,12 +30,9 @@ async def query_agent_stream(request: AgentQueryRequest):
         session_event = StreamingEvent(type="session", data={"session_id": session_id})
         yield f"data: {session_event.to_json()}\n\n"
 
-        agent = create_research_agent(
-            prompt_type=request.prompt_type,
-            max_iterations=request.max_iterations,
-            early_stopping_method=request.early_stopping_method,
+        agent = ResearchReActAgent(
             session_id=session_id,
-            verbose=False,  # Disable verbose to avoid duplicate logs
+            prompt_type=request.prompt_type,
         )
 
         callback = StreamingCallbackHandler(queue, loop)
