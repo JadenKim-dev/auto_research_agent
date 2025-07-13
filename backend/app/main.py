@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from .api.routes import agent
+from .api.routes import agent, logs
 
 app = FastAPI(
     title="Research Assistant API",
@@ -21,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(agent.router)
+app.include_router(logs.router)
 
 
 @app.get("/")
