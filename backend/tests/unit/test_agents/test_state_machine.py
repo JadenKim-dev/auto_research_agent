@@ -9,7 +9,7 @@ class TestAgentStateMachine:
         state_machine = AgentStateMachine("test-session")
 
         assert state_machine.can_transition(AgentState.RUNNING) is True
-        assert state_machine.can_transition(AgentState.ERROR) is False
+        assert state_machine.can_transition(AgentState.ERROR) is True
         assert state_machine.can_transition(AgentState.COMPLETED) is False
         assert state_machine.can_transition(AgentState.IDLE) is False
 
@@ -37,7 +37,7 @@ class TestAgentStateMachine:
 
         assert state_machine.can_transition(AgentState.IDLE) is True
         assert state_machine.can_transition(AgentState.RUNNING) is True
-        assert state_machine.can_transition(AgentState.ERROR) is False
+        assert state_machine.can_transition(AgentState.ERROR) is True
         assert state_machine.can_transition(AgentState.COMPLETED) is False
 
     def test_successful_transition(self):

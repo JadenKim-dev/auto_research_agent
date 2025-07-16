@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field, field_validator
 import logging
 
 from .prompts import react_prompt, research_react_prompt, simple_react_prompt
+from .state_machine import AgentStateMachine, AgentState
+from .error_handler import APIErrorHandler
 from ..tools.basic_tools import BASIC_TOOLS
 from ..memory.redis_memory import RedisChatMessageHistory
 from ..memory.summary_manager import ConversationSummaryManager
@@ -32,21 +34,20 @@ PROMPT_MAP = {
 }
 
 
-class AgentConfig(BaseModel):    
+class AgentConfig(BaseModel):
     session_id: str = Field(..., description="Session ID for Redis memory")
     prompt_type: PromptType = Field(
-        default=PromptType.STANDARD,
-        description="Type of prompt to use"
+        default=PromptType.STANDARD, description="Type of prompt to use"
     )
 
-    @field_validator('session_id')
+    @field_validator("session_id")
     @classmethod
     def validate_session_id(cls, v):
         if not v or not v.strip():
             raise ValueError("session_id is required and cannot be empty")
         return v.strip()
 
-    @field_validator('prompt_type')
+    @field_validator("prompt_type")
     @classmethod
     def validate_prompt_type(cls, v):
         if not isinstance(v, PromptType):
@@ -66,11 +67,14 @@ class ResearchReActAgent:
             prompt_type: Type of prompt to use (PromptType enum)
         """
         config = AgentConfig(session_id=session_id, prompt_type=prompt_type)
-        
+
         self.session_id = config.session_id
         self.prompt_type = config.prompt_type
         self.llm = LLMClient.get_client()
         self.tools = BASIC_TOOLS
+
+        self.state_machine = AgentStateMachine(self.session_id)
+        self.error_handler = APIErrorHandler(self.state_machine)
 
         self.prompt = PROMPT_MAP.get(config.prompt_type, react_prompt)
 
@@ -120,24 +124,34 @@ class ResearchReActAgent:
         Returns:
             Dictionary containing the result and metadata
         """
-        tao_logger = TAOLogger(
-            session_id=getattr(self.memory, "session_id", "default")
-        )
+        tao_logger = TAOLogger(session_id=getattr(self.memory, "session_id", "default"))
         callbacks.append(tao_logger)
+
+        self.state_machine.transition_to(AgentState.RUNNING)
 
         try:
             result = await self.executor.ainvoke(
                 {"input": query}, config={"callbacks": callbacks}
             )
         except Exception as e:
-            logger.error(f"Error running agent: {str(e)}")
+            if "openai" in str(e).lower() or "llm" in str(e).lower():
+                error_response = self.error_handler.handle_llm_error(e)
+            else:
+                error_response = self.error_handler.handle_external_api_error(
+                    e, "agent"
+                )
+
             return {
-                "output": f"Error: {str(e)}",
+                "output": f"Error: {error_response['message']}",
                 "intermediate_steps": [],
                 "trace": None,
                 "config": self.config,
                 "error": True,
+                "error_details": error_response,
+                "state": self.state_machine.get_state_info(),
             }
+
+        self.state_machine.transition_to(AgentState.COMPLETED)
 
         trace = None
         tao_logs = None
@@ -152,6 +166,7 @@ class ResearchReActAgent:
             "trace": trace,
             "tao_logs": tao_logs,
             "config": self.config,
+            "state": self.state_machine.get_state_info(),
         }
 
 

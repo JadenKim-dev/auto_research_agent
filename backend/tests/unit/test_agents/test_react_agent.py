@@ -180,8 +180,10 @@ class TestResearchReActAgent:
         result = await agent.run("test query")
 
         assert result["error"] == True
-        assert "Error: Execution failed" in result["output"]
+        assert "agent API error: Execution failed" in result["output"]
         assert result["intermediate_steps"] == []
+        assert "error_details" in result
+        assert "state" in result
 
     def test_config_property(self, mock_agent_dependencies, test_session_id):
         """Test that config property contains correct information."""

@@ -13,10 +13,10 @@ class AgentState(Enum):
 class AgentStateMachine:
 
     VALID_TRANSITIONS = {
-        AgentState.IDLE: [AgentState.RUNNING],
+        AgentState.IDLE: [AgentState.RUNNING, AgentState.ERROR],
         AgentState.RUNNING: [AgentState.COMPLETED, AgentState.ERROR],
         AgentState.ERROR: [AgentState.RUNNING, AgentState.IDLE],
-        AgentState.COMPLETED: [AgentState.IDLE, AgentState.RUNNING],
+        AgentState.COMPLETED: [AgentState.IDLE, AgentState.RUNNING, AgentState.ERROR],
     }
 
     def __init__(self, session_id: str):
