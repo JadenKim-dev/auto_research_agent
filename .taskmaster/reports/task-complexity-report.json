@@ -1,0 +1,77 @@
+{
+	"meta": {
+		"generatedAt": "2025-07-16T15:32:39.296Z",
+		"tasksAnalyzed": 8,
+		"totalTasks": 10,
+		"analysisCount": 8,
+		"thresholdScore": 5,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 3,
+			"taskTitle": "Vercel AI SDK 기반 채팅 인터페이스 구현",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "이 작업을 5개의 하위 작업으로 나누어주세요. 각 하위 작업은 다음을 포함해야 합니다: 1) API Route 설정 및 OpenAI 스트리밍 엔드포인트 구현, 2) shadcn/ui 컴포넌트 설치 및 기본 레이아웃 구성, 3) 메시지 컴포넌트 및 채팅 UI 구현, 4) useChat Hook 통합 및 상태 관리, 5) 스트리밍 응답 처리 및 UX 개선. 각 작업에 대해 구체적인 구현 세부사항과 테스트 전략을 포함해주세요.",
+			"reasoning": "이미 10개의 서브태스크가 정의되어 있지만, 효율적인 개발을 위해 5개로 통합하는 것을 권장합니다. 현재 서브태스크들이 너무 세분화되어 있어 관련 작업들을 그룹화하면 더 효과적인 구현이 가능합니다."
+		},
+		{
+			"taskId": 4,
+			"taskTitle": "LangChain 문서 처리 파이프라인 구현",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "이 작업을 6개의 하위 작업으로 나누어주세요: 1) PDF/웹 문서 로더 구현 및 기본 처리 로직, 2) 텍스트 분할 전략 및 청킹 최적화, 3) 메타데이터 추출 및 관리 시스템, 4) 문서 업로드 API 엔드포인트 구현, 5) 문서 처리 파이프라인 통합 테스트, 6) 에러 처리 및 대용량 파일 지원. 각 작업은 구체적인 코드 예시와 성능 고려사항을 포함해야 합니다.",
+			"reasoning": "PDF와 웹 문서 처리는 각각 다른 접근법이 필요하고, 청킹 전략, 메타데이터 관리, API 통합 등 여러 복잡한 요소가 있어 6개의 서브태스크가 적절합니다."
+		},
+		{
+			"taskId": 5,
+			"taskTitle": "Pinecone 벡터 데이터베이스 통합",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "이 작업을 5개의 하위 작업으로 나누어주세요: 1) Pinecone 초기화 및 인덱스 생성, 2) OpenAI 임베딩 생성 및 벡터 저장 구현, 3) 유사도 검색 및 쿼리 최적화, 4) 메타데이터 필터링 및 하이브리드 검색, 5) 성능 최적화 및 인덱스 관리. 각 작업에는 구체적인 구현 코드와 벤치마크 테스트 계획을 포함해주세요.",
+			"reasoning": "벡터 데이터베이스 통합은 초기 설정, 임베딩 처리, 검색 구현, 최적화 등 명확히 구분되는 단계가 있어 5개의 서브태스크가 적절합니다."
+		},
+		{
+			"taskId": 6,
+			"taskTitle": "Agent와 RAG 시스템 통합",
+			"complexityScore": 9,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "이 작업을 7개의 하위 작업으로 나누어주세요: 1) RAG Tool 클래스 구현, 2) RetrievalQA 체인 설정 및 최적화, 3) Agent 프롬프트 템플릿 커스터마이징, 4) 컨텍스트 관리 및 토큰 최적화, 5) 소스 인용 및 출처 표시 시스템, 6) 하이브리드 응답 생성 로직, 7) 통합 테스트 및 품질 검증. 각 작업은 상세한 구현 방법과 예상되는 도전과제를 포함해야 합니다.",
+			"reasoning": "Agent와 RAG의 통합은 프로젝트의 핵심이며, 프롬프트 엔지니어링, 컨텍스트 관리, 응답 품질 보장 등 복잡한 요소가 많아 7개의 서브태스크가 필요합니다."
+		},
+		{
+			"taskId": 7,
+			"taskTitle": "LangChain Tools 프레임워크 구현",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "이 작업을 5개의 하위 작업으로 나누어주세요: 1) Tool Registry 아키텍처 설계 및 구현, 2) 웹 검색 도구 통합 (SerperAPI), 3) Python REPL 도구 및 샌드박싱, 4) 커스텀 도구 개발 프레임워크, 5) 도구 선택 로직 및 오케스트레이션. 각 작업은 보안 고려사항과 에러 처리 전략을 포함해야 합니다.",
+			"reasoning": "도구 시스템은 아키텍처 설계, 개별 도구 구현, 통합이 필요하며, 특히 코드 실행의 보안성이 중요하여 5개의 서브태스크가 적절합니다."
+		},
+		{
+			"taskId": 8,
+			"taskTitle": "연구 세션 관리 시스템 구현",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "이 작업을 5개의 하위 작업으로 나누어주세요: 1) Prisma 스키마 설계 및 데이터베이스 설정, 2) 세션 CRUD API 엔드포인트 구현, 3) 메시지 히스토리 관리 및 검색, 4) 세션 상태 관리 및 복구 메커니즘, 5) 세션 격리 및 동시성 처리. 각 작업은 데이터 무결성과 성능 최적화 방안을 포함해야 합니다.",
+			"reasoning": "세션 관리는 데이터 모델링, API 구현, 상태 관리 등 표준적인 백엔드 작업으로 구성되어 5개의 서브태스크가 적절합니다."
+		},
+		{
+			"taskId": 9,
+			"taskTitle": "고급 UI/UX 기능 구현",
+			"complexityScore": 7,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "이 작업을 6개의 하위 작업으로 나누어주세요: 1) 사고 과정 시각화 컴포넌트 개발, 2) 실시간 진행률 표시 시스템, 3) 마크다운 렌더러 및 코드 하이라이팅, 4) 드래그앤드롭 파일 업로드 UI, 5) 소스 인용 표시 컴포넌트, 6) 반응형 디자인 및 접근성 개선. 각 작업은 사용자 경험 향상을 위한 구체적인 구현 방안을 포함해야 합니다.",
+			"reasoning": "고급 UI 기능은 각각 독립적인 컴포넌트 개발이 필요하고, 사용자 경험에 직접적인 영향을 미치므로 6개의 서브태스크로 세분화가 필요합니다."
+		},
+		{
+			"taskId": 10,
+			"taskTitle": "성능 최적화 및 프로덕션 준비",
+			"complexityScore": 8,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "이 작업을 7개의 하위 작업으로 나누어주세요: 1) Redis 캐싱 레이어 구현, 2) 모델 전환 로직 및 비용 최적화, 3) Celery 백그라운드 작업 큐 설정, 4) API rate limiting 및 사용량 추적, 5) 에러 모니터링 (Sentry) 통합, 6) 로드 테스팅 및 성능 벤치마크, 7) 배포 파이프라인 구성 (Vercel/Railway). 각 작업은 구체적인 성능 지표와 모니터링 전략을 포함해야 합니다.",
+			"reasoning": "프로덕션 준비는 캐싱, 모니터링, 성능 최적화, 배포 등 다양한 영역을 다루며, 각각 전문적인 설정이 필요하여 7개의 서브태스크가 필요합니다."
+		}
+	]
+}
